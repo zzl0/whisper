@@ -42,7 +42,7 @@ except ImportError:
 
 fallocate = None
 
-if CAN_FALLOCATE: 
+if CAN_FALLOCATE:
   libc_name = ctypes.util.find_library('c')
   libc = ctypes.CDLL(libc_name)
   c_off64_t = ctypes.c_int64
@@ -177,6 +177,7 @@ class CorruptWhisperFile(WhisperException):
     return "%s (%s)" % (self.error, self.path)
 
 def enableDebug():
+  import inspect
   global open, debug, startBlock, endBlock
   class open(file):
     def __init__(self,*args,**kwargs):
@@ -186,12 +187,14 @@ def enableDebug():
 
     def write(self,data):
       self.writeCount += 1
-      debug('WRITE %d bytes #%d' % (len(data),self.writeCount))
+      caller = inspect.stack()[1][3]
+      debug('WRITE %d bytes #%d in %s' % (len(data),self.writeCount, caller))
       return file.write(self,data)
 
     def read(self,bytes):
       self.readCount += 1
-      debug('READ %d bytes #%d' % (bytes,self.readCount))
+      caller = inspect.stack()[1][3]
+      debug('READ %d bytes #%d in %s' % (bytes,self.readCount, caller))
       return file.read(self,bytes)
 
   def debug(message):
@@ -542,7 +545,8 @@ def file_update(fh, value, timestamp):
     fcntl.flock( fh.fileno(), fcntl.LOCK_EX )
 
   header = __readHeader(fh)
-  now = int( time.time() )
+  # now = int( time.time() )
+  now = 106
   if timestamp is None:
     timestamp = now
 
@@ -783,14 +787,20 @@ def file_fetch(fh, fromTime, untilTime, now = None):
 
   return __archive_fetch(fh, archive, fromTime, untilTime)
 
+def roundup(x, base):
+    import math
+    return int(math.ceil(x/float(base))) * base
+
 def __archive_fetch(fh, archive, fromTime, untilTime):
   """
 Fetch data from a single archive. Note that checks for validity of the time
 period requested happen above this level so it's possible to wrap around the
 archive on a read and request data older than the archive's retention
 """
-  fromInterval = int( fromTime - (fromTime % archive['secondsPerPoint']) ) + archive['secondsPerPoint']
-  untilInterval = int( untilTime - (untilTime % archive['secondsPerPoint']) ) + archive['secondsPerPoint']
+  # fromInterval = int( fromTime - (fromTime % archive['secondsPerPoint']) ) + archive['secondsPerPoint']
+  # untilInterval = int( untilTime - (untilTime % archive['secondsPerPoint']) ) + archive['secondsPerPoint']
+  fromInterval = roundup(fromTime, archive['secondsPerPoint'])
+  untilInterval = roundup(untilTime, archive['secondsPerPoint'])
   fh.seek(archive['offset'])
   packedPoint = fh.read(pointSize)
   (baseInterval,baseValue) = struct.unpack(pointFormat,packedPoint)
